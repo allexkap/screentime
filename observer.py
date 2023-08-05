@@ -1,5 +1,7 @@
 import os
+import re
 import yaml
+from datetime import datetime
 
 
 class Observer:
@@ -19,8 +21,9 @@ class Observer:
 
     def cache_update(self):
         data = yaml.dump(self.points)
-        # with open(self.temp_path) as file:
-        #     file.write(data)
+        date = datetime.strftime(datetime.now(), '%y%m%d%H%M')
+        with open(f'{self.temp_path}/{date}.log') as file:
+            file.write(data)
         self.points.clear()
 
     def final_update(self):

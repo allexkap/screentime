@@ -18,7 +18,10 @@ class Observer:
         self.windows = windows
 
     def cache_update(self):
-        pass
+        data = yaml.dump(self.points)
+        # with open(self.temp_path) as file:
+        #     file.write(data)
+        self.points.clear()
 
     def final_update(self):
         pass

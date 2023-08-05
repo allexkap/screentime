@@ -13,7 +13,9 @@ class Observer:
         self.points = dict()
 
     def local_update(self, windows, weight=10):
-        pass
+        for window in self.windows & windows:
+            self.points[window] += weight
+        self.windows = windows
 
     def cache_update(self):
         pass

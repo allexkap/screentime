@@ -1,0 +1,22 @@
+import os
+import yaml
+
+
+class Observer:
+
+    def __init__(self, path='.'):
+        self.base_path = path
+        self.temp_path = path + '/temp'
+        if not os.path.exists(self.temp_path):
+            os.mkdir(self.temp_path)
+        self.windows = set()
+        self.points = dict()
+
+    def local_update(self, windows, weight=10):
+        pass
+
+    def cache_update(self):
+        pass
+
+    def final_update(self):
+        pass

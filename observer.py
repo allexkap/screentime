@@ -1,30 +1,48 @@
 import os
-import re
 import yaml
+import schedule
+import asyncio
 from datetime import datetime
 
 
 class Observer:
 
-    def __init__(self, path='.'):
-        self.base_path = path
-        self.temp_path = path + '/temp'
-        if not os.path.exists(self.temp_path):
-            os.mkdir(self.temp_path)
-        self.windows = set()
-        self.points = dict()
+    def __init__(self, func, path='.', weight=1, pattern='%y%m%d%H'):
+        self.func = func
+        self.path = path
+        self.weight = weight
+        self.pattern = pattern
+        self.cache = self.load_cache()
+        self.scheduling()
 
-    def local_update(self, windows, weight=10):
-        for window in self.windows & windows:
-            self.points[window] += weight
-        self.windows = windows
+    def load_cache(self):
+        path = f'{self.path}/{datetime.strftime(datetime.now(), self.pattern)}'
+        points = dict()
+        if os.path.exists(path):
+            with open(path) as file:
+                return yaml.load(file.read(), yaml.Loader)
+        return {'path': path, 'points': points}
 
-    def cache_update(self):
-        data = yaml.dump(self.points)
-        date = datetime.strftime(datetime.now(), '%y%m%d%H%M')
-        with open(f'{self.temp_path}/{date}.log') as file:
-            file.write(data)
-        self.points.clear()
+    def reopen(self):
+        self.commit()
+        self.cache = load_cache()
 
-    def final_update(self):
-        pass
+    def update(self):
+        window = self.func()
+        if window not in self.cache['points']:
+            self.cache['points'][window] = 0
+        self.cache['points'][window] += self.weight
+
+    def commit(self):
+        with open(self.cache['path'], 'w') as file:
+            file.write(yaml.dump(self.cache['points']))
+
+    def scheduling(self):
+        schedule.every( 1).seconds.do(self.update)
+        schedule.every(10).minutes.do(self.commit)
+        schedule.every(  ).hour.at('00:00').do(self.reopen)
+
+    async def run(self):
+        while True:
+            schedule.run_pending()
+            await asyncio.sleep(1)

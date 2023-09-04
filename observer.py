@@ -1,8 +1,17 @@
 import os
+import time
 import yaml
-import schedule
 import asyncio
-from datetime import datetime
+
+
+async def wait(delay, coro):
+    await asyncio.sleep(delay)
+    await coro
+
+async def repeat(func, delay):
+    while True:
+        func()
+        await asyncio.sleep(delay)
 
 
 class Observer:
@@ -15,13 +24,13 @@ class Observer:
         self.cache = self.load_cache()
 
     def load_cache(self):
-        path = f'{self.path}/{datetime.strftime(datetime.now(), self.pattern)}'
+        path = f'{self.path}/{time.strftime(self.pattern, time.localtime())}'
         if os.path.exists(path):
             with open(path) as file:
                 return yaml.load(file.read(), yaml.Loader)
         return {'path': path, 'points': dict()}
 
-    def reload_cache(self):
+    def reload(self):
         self.commit()
         self.cache = load_cache()
 
@@ -36,10 +45,8 @@ class Observer:
             file.write(yaml.dump(self.cache['points']))
 
     async def observe(self):
-        schedule.clear()
-        schedule.every( 1).seconds.do(self.update)
-        schedule.every(10).minutes.do(self.commit)
-        schedule.every().hour.at('00:00').do(self.reload_cache)
-        while True:
-            schedule.run_pending()
-            await asyncio.sleep(1)
+        tasks = (
+            repeat(self.update, delay=1),
+            repeat(self.commit, delay=10*60),
+            repeat(self.reload, delay=60*60, wait=(60-r.tm_min)*60+r.tm_sec)
+        )

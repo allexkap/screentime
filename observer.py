@@ -26,11 +26,7 @@ class Observer:
         self.cache = load_cache()
 
     def update(self):
-        try:
-            window = self.func()
-        except Exception as e:
-            window = None
-            print(e)    # todo: logging
+        window = self.func()
         if window not in self.cache['points']:
             self.cache['points'][window] = 0
         self.cache['points'][window] += self.weight

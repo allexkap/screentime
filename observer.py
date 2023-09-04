@@ -13,26 +13,24 @@ class Observer:
         self.weight = weight
         self.pattern = pattern
         self.cache = self.load_cache()
-        self.scheduling()
 
     def load_cache(self):
         path = f'{self.path}/{datetime.strftime(datetime.now(), self.pattern)}'
-        points = dict()
         if os.path.exists(path):
             with open(path) as file:
                 return yaml.load(file.read(), yaml.Loader)
-        return {'path': path, 'points': points}
+        return {'path': path, 'points': dict()}
 
-    def reopen(self):
+    def reload_cache(self):
         self.commit()
         self.cache = load_cache()
 
     def update(self):
         try:
-            window = self.func():
-        except Exception as ex:
+            window = self.func()
+        except Exception as e:
             window = None
-            print('ex')
+            print(e)    # todo: logging
         if window not in self.cache['points']:
             self.cache['points'][window] = 0
         self.cache['points'][window] += self.weight
@@ -41,12 +39,11 @@ class Observer:
         with open(self.cache['path'], 'w') as file:
             file.write(yaml.dump(self.cache['points']))
 
-    def scheduling(self):
+    async def observe(self):
+        schedule.clear()
         schedule.every( 1).seconds.do(self.update)
         schedule.every(10).minutes.do(self.commit)
-        schedule.every(  ).hour.at('00:00').do(self.reopen)
-
-    async def run(self):
+        schedule.every().hour.at('00:00').do(self.reload_cache)
         while True:
             schedule.run_pending()
             await asyncio.sleep(1)

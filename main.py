@@ -19,4 +19,4 @@ def getProcessName():
 import asyncio
 from observer import Observer
 
-asyncio.run(Observer(func=getProcessName, path='log').run())
+asyncio.run(Observer(func=getProcessName, path='log').observe())

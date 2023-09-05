@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 async def repeat(func, delay, wait=-1):
     await asyncio.sleep(delay if wait < 0 else wait)
     while True:
-        func()
-        await asyncio.sleep(delay)
+        r = func()
+        await asyncio.sleep(r if r else delay)
 
 def until00min():
     now = time.localtime()
@@ -61,21 +61,18 @@ class Observer:
         with open(self.cache.path, 'w') as file:
             file.write(yaml.dump(self.cache.score))
 
-    async def checkActivity(self):
+    def checkActivity(self):
         sec = self.idle()
-        while True:
-            if sec < self.interval['idle']:
-                self.is_active = True
-                await asyncio.sleep(self.interval['idle'] - sec)
-            else:
-                self.is_active = False
-            await asyncio.sleep(1)
+        if sec < self.interval['idle']:
+            self.is_active = True
+            return self.interval['idle'] - sec + 1
+        self.is_active = False
 
     async def observe(self):
         coros = (
             repeat(self.update, delay=self.interval['update']),
             repeat(self.commit, delay=self.interval['commit']),
             repeat(self.reload, delay=60*60, wait=until00min()),
-            self.checkActivity(),
+            repeat(self.checkActivity, delay=1),
         )
         await asyncio.gather(*coros)

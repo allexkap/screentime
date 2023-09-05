@@ -4,22 +4,31 @@ import win32process
 import psutil
 
 
-def getIdleSec():
-    try:
-        return win32api.GetTickCount() - win32api.GetLastInputInfo()
-    except Exception as e:
-        print('Warning:', e)
-        return 0
+def safe(default, handler=lambda e: None):
+    def dec(func):
+        def inner(*args, **kwargs):
+            try:
+                return func()
+            except Exception as e:
+                handler(e)
+                return default
+        return inner
+    return dec
 
+
+def handler(e):
+    print('Warning:', e)
+
+@safe(0, handler)
+def getIdleSec():
+    return win32api.GetTickCount() - win32api.GetLastInputInfo()
+
+@safe(None, handler)
 def getProcessName():
-    try:
-        hwnd = win32gui.GetForegroundWindow()
-        _, pid = win32process.GetWindowThreadProcessId(hwnd)
-        name = psutil.Process(pid).name()
-        return name
-    except Exception as e:
-        print('Warning:', e)
-        return None
+    hwnd = win32gui.GetForegroundWindow()
+    _, pid = win32process.GetWindowThreadProcessId(hwnd)
+    name = psutil.Process(pid).name()
+    return name
 
 
 import asyncio

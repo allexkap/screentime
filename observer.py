@@ -1,5 +1,4 @@
 import os
-import time
 import yaml
 import asyncio
 from datetime import datetime, timedelta
@@ -17,14 +16,10 @@ async def repeat(func, arg):
         await lightsleep(res or (arg() if callable(arg) else arg))
         res = func()
 
-def until00min():
-    now = time.localtime()
-    return (60 - now.tm_min) * 60 + now.tm_sec
-
-
 @dataclass
 class Cache:
     path: str
+    timestamp: datetime
     score: dict[str, int] = field(default_factory=dict)
 
 
@@ -37,7 +32,7 @@ class Observer:
         self.pattern = pattern
         self.interval = {
             'update': 1,
-            'commit': 10*60,
+            'commit': 60,
             'idle': 60,
         }
         self.interval.update(interval)
@@ -45,17 +40,20 @@ class Observer:
         self.is_active = True
 
     def loadCache(self):
-        path = f'{self.path}/{time.strftime(self.pattern, time.localtime())}'
+        timestamp = datetime.now()
+        path = f'{self.path}/{timestamp.strftime(self.pattern)}'
         if not os.path.exists(path):
-            return Cache(path)
+            return Cache(path, timestamp)
         with open(path) as file:
-            return Cache(path, yaml.load(file.read(), yaml.Loader))
+            return Cache(path, timestamp, yaml.load(file.read(), yaml.Loader))
 
-    def reload(self):
-        self.commit()
-        self.cache = self.loadCache()
+    def validateCache(self):
+        if datetime.now().hour != self.cache.timestamp.hour:
+            self.commit()
+            self.cache = self.loadCache()
 
     def update(self):
+        self.validateCache()
         if not self.is_active:
             return
         window = self.watch()
@@ -71,14 +69,13 @@ class Observer:
         sec = self.idle()
         if sec < self.interval['idle']:
             self.is_active = True
-            return self.interval['idle'] - sec + 1
+            return self.interval['idle'] - sec
         self.is_active = False
 
     async def observe(self):
         coros = (
             repeat(self.update, arg=self.interval['update']),
             repeat(self.commit, arg=self.interval['commit']),
-            repeat(self.reload, arg=until00min),
             repeat(self.checkActivity, arg=1),
         )
         await asyncio.gather(*coros)

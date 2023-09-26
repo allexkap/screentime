@@ -19,7 +19,7 @@ async def repeat(func, arg):
 @dataclass
 class Cache:
     path: str
-    timestamp: datetime
+    timestamp: int
     score: dict[str, int] = field(default_factory=dict)
 
 
@@ -41,14 +41,15 @@ class Observer:
 
     def loadCache(self):
         timestamp = datetime.now()
+        ts = timestamp.timestamp() // 3600
         path = f'{self.path}/{timestamp.strftime(self.pattern)}'
         if not os.path.exists(path):
-            return Cache(path, timestamp)
+            return Cache(path, ts)
         with open(path) as file:
-            return Cache(path, timestamp, yaml.load(file.read(), yaml.Loader))
+            return Cache(path, ts, yaml.load(file.read(), yaml.Loader))
 
     def validateCache(self):
-        if datetime.now().hour != self.cache.timestamp.hour:
+        if datetime.now().timestamp() // 3600 != self.cache.timestamp:
             self.commit()
             self.cache = self.loadCache()
 

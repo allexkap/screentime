@@ -2,14 +2,20 @@ import os
 import time
 import yaml
 import asyncio
+from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 
 
+async def lightsleep(seconds):
+    date = datetime.now() + timedelta(seconds=seconds)
+    while datetime.now() < date:
+        await asyncio.sleep(1)
+
 async def repeat(func, delay, wait=-1):
-    await asyncio.sleep(delay if wait < 0 else wait)
+    await lightsleep(delay if wait < 0 else wait)
     while True:
         r = func()
-        await asyncio.sleep(r if r else delay)
+        await lightsleep(r if r else delay)
 
 def until00min():
     now = time.localtime()

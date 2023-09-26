@@ -11,11 +11,11 @@ async def lightsleep(seconds):
     while datetime.now() < date:
         await asyncio.sleep(1)
 
-async def repeat(func, delay, wait=-1):
-    await lightsleep(delay if wait < 0 else wait)
+async def repeat(func, arg):
+    res = None
     while True:
-        r = func()
-        await lightsleep(r if r else delay)
+        await lightsleep(res or (arg() if callable(arg) else arg))
+        res = func()
 
 def until00min():
     now = time.localtime()
@@ -76,9 +76,9 @@ class Observer:
 
     async def observe(self):
         coros = (
-            repeat(self.update, delay=self.interval['update']),
-            repeat(self.commit, delay=self.interval['commit']),
-            repeat(self.reload, delay=60*60, wait=until00min()),
-            repeat(self.checkActivity, delay=1),
+            repeat(self.update, arg=self.interval['update']),
+            repeat(self.commit, arg=self.interval['commit']),
+            repeat(self.reload, arg=until00min),
+            repeat(self.checkActivity, arg=1),
         )
         await asyncio.gather(*coros)

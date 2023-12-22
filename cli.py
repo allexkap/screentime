@@ -98,11 +98,11 @@ def gen_hour_view(logs, apps, start, stop, hour_shift=8):
     preheader = ''.join(
         f'{" " * max(b - a - 3, 0)}{m.strftime("%b")}'
         for m, (a, b) in zip(
-            monthrange(dates[0], dates[1]),
+            monthrange(dates[0], dates[1] + timedelta(days=4)),
             itertools.pairwise(
                 (
                     *(0, 0),
-                    *(pos.start() for pos in re.finditer('(?<=[1-9]\d  )0\d', header)),
+                    *(pos.start() for pos in re.finditer(r'(?<=[1-9]\d  )0\d', header)),
                 )
             ),
         )
@@ -110,4 +110,54 @@ def gen_hour_view(logs, apps, start, stop, hour_shift=8):
     body = '\n'.join(
         f'{(hour+hour_shift)%24:02} {line}' for hour, line in enumerate(array2text(res))
     )
+
     return f'   {preheader}\n   {header}\n{body}\n'
+
+
+def gen_day_view(logs, apps, start, stop):
+    res = np.fromiter(
+        chain.from_iterable(
+            (
+                (
+                    sum(
+                        logs[ts].get(app, 0)
+                        for app in apps
+                        for ts in timerange(
+                            day, day + timedelta(days=1), timedelta(hours=1)
+                        )
+                    )
+                    for day in timerange(
+                        week, week + timedelta(days=7), timedelta(days=1)
+                    )
+                )
+                for week in timerange(start, stop, timedelta(days=7))
+            )
+        ),
+        dtype=int,
+    )
+    res.shape = -1, 7
+    res = norm(res).T
+
+    header = '  '.join(
+        ts.strftime(r'%d') for ts in timerange(start, stop, timedelta(days=14))
+    )
+    preheader = ''.join(
+        f'{" " * max(b - a - 3, 0)}{m.strftime("%b")}'
+        for m, (a, b) in zip(
+            monthrange(dates[0], dates[1] + timedelta(days=4)),
+            itertools.pairwise(
+                (
+                    *(0, 0),
+                    *(
+                        pos.start()
+                        for pos in re.finditer(
+                            r'(?<=[123]\d  )0\d|(?<=[23]\d  )1\d', header
+                        )
+                    ),
+                )
+            ),
+        )
+    )
+    weekdays = ('Mon', '   ', 'Wed', '   ', 'Fri', '   ', 'Sun')  # o_o
+    body = '\n'.join(f'{weekdays[n]} {line}' for n, line in enumerate(array2text(res)))
+    return f'    {preheader}\n    {header}\n{body}\n'

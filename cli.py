@@ -1,7 +1,10 @@
+import enum
+import itertools
 import os
 import re
 from collections import Counter
 from datetime import datetime, timedelta
+from itertools import chain
 from pathlib import Path
 
 import numpy as np
@@ -14,16 +17,26 @@ def color2text(r, g, b, t='  '):
 
 
 def array2text(arr):
-    return '\n'.join(''.join(color2text(0, cell, 0) for cell in row) for row in arr)
+    return tuple(''.join(color2text(0, cell, 0) for cell in row) for row in arr)
 
 
 def norm(arr):
-    return (arr / arr.max() * 255).astype(int)
+    arr *= 255
+    arr //= arr.max() // 255
+    return arr
 
 
 def timerange(start: datetime, stop: datetime, step: timedelta):
     while start < stop:
         yield start
+        start += step
+
+
+def monthrange(start: datetime, stop: datetime):
+    while start < stop:
+        yield start
+        tmp = start.replace(day=1)
+        step = (tmp + timedelta(days=32)).replace(day=1) - tmp
         start += step
 
 
@@ -64,7 +77,37 @@ class Logs:
         return self.logs.get(index, Counter())
 
 
-def gen_detail_view(logs, start, stop):
-    for day in timerange(start, stop, timedelta(days=1)):
-        for ts in timerange(day, day + timedelta(days=1), timedelta(hours=1)):
-            pass
+def gen_hour_view(logs, apps, start, stop, hour_shift=8):
+    res = np.fromiter(
+        chain.from_iterable(
+            (
+                sum(logs[ts].get(app, 0) for app in apps)
+                for ts in timerange(day, day + timedelta(days=1), timedelta(hours=1))
+            )
+            for day in timerange(start, stop, timedelta(days=1))
+        ),
+        dtype=int,
+    )
+    res.shape = -1, 24
+    res = np.roll(res, -hour_shift)
+    res = norm(res).T
+
+    header = '  '.join(
+        ts.strftime(r'%d') for ts in timerange(start, stop, timedelta(days=2))
+    )
+    preheader = ''.join(
+        f'{" " * max(b - a - 3, 0)}{m.strftime("%b")}'
+        for m, (a, b) in zip(
+            monthrange(dates[0], dates[1]),
+            itertools.pairwise(
+                (
+                    *(0, 0),
+                    *(pos.start() for pos in re.finditer('(?<=[1-9]\d  )0\d', header)),
+                )
+            ),
+        )
+    )
+    body = '\n'.join(
+        f'{(hour+hour_shift)%24:02} {line}' for hour, line in enumerate(array2text(res))
+    )
+    return f'   {preheader}\n   {header}\n{body}\n'

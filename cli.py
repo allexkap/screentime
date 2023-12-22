@@ -1,4 +1,3 @@
-import enum
 import itertools
 import os
 import re
@@ -12,6 +11,8 @@ import yaml
 
 
 def color2text(r, g, b, t='  '):
+    if min(r, g, b) < 0:
+        return t
     f = lambda v: min(max(int(v), 0), 255)
     return f'\033[48;2;{f(r)};{f(g)};{f(b)}m{t}\033[0m'
 
@@ -20,7 +21,7 @@ def array2text(arr):
     return tuple(''.join(color2text(0, cell, 0) for cell in row) for row in arr)
 
 
-def norm(arr):
+def normalize(arr):
     arr *= 255
     arr //= arr.max() // 255
     return arr
@@ -33,11 +34,20 @@ def timerange(start: datetime, stop: datetime, step: timedelta):
 
 
 def monthrange(start: datetime, stop: datetime):
+    day = timedelta(days=1)
+    carry = timedelta()
     while start < stop:
         yield start
         tmp = start.replace(day=1)
         step = (tmp + timedelta(days=32)).replace(day=1) - tmp
+        tmp = start
         start += step
+        while carry.days:
+            start += carry
+            carry -= day
+        while start.month - tmp.month == 2:
+            carry += day
+            start -= day
 
 
 class Logs:
@@ -90,15 +100,16 @@ def gen_hour_view(logs, apps, start, stop, hour_shift=8):
     )
     res.shape = -1, 24
     res = np.roll(res, -hour_shift)
-    res = norm(res).T
+    res = normalize(res).T
 
     header = '  '.join(
         ts.strftime(r'%d') for ts in timerange(start, stop, timedelta(days=2))
     )
+
     preheader = ''.join(
         f'{" " * max(b - a - 3, 0)}{m.strftime("%b")}'
         for m, (a, b) in zip(
-            monthrange(dates[0], dates[1] + timedelta(days=4)),
+            monthrange(start, stop + timedelta(days=4)),
             itertools.pairwise(
                 (
                     *(0, 0),
@@ -107,6 +118,7 @@ def gen_hour_view(logs, apps, start, stop, hour_shift=8):
             ),
         )
     )
+
     body = '\n'.join(
         f'{(hour+hour_shift)%24:02} {line}' for hour, line in enumerate(array2text(res))
     )
@@ -115,6 +127,11 @@ def gen_hour_view(logs, apps, start, stop, hour_shift=8):
 
 
 def gen_day_view(logs, apps, start, stop):
+    start_offset = start.weekday()
+    start -= timedelta(days=start_offset)
+    stop_offset = -stop.weekday() % 7
+    stop += timedelta(days=stop_offset)
+
     res = np.fromiter(
         chain.from_iterable(
             (
@@ -130,21 +147,34 @@ def gen_day_view(logs, apps, start, stop):
                         week, week + timedelta(days=7), timedelta(days=1)
                     )
                 )
-                for week in timerange(start, stop, timedelta(days=7))
+                for week in timerange(
+                    start,
+                    stop,
+                    timedelta(days=7),
+                )
             )
         ),
         dtype=int,
     )
     res.shape = -1, 7
-    res = norm(res).T
+    res = normalize(res).T
 
+    for i in range(start_offset):
+        res[i, 0] = -1
+    for i in range(stop_offset):
+        res[-i - 1, -1] = -1
+
+    header_start = start
+    if start_offset:
+        header_start += timedelta(days=7)
     header = '  '.join(
-        ts.strftime(r'%d') for ts in timerange(start, stop, timedelta(days=14))
+        ts.strftime(r'%d') for ts in timerange(header_start, stop, timedelta(days=14))
     )
+
     preheader = ''.join(
         f'{" " * max(b - a - 3, 0)}{m.strftime("%b")}'
         for m, (a, b) in zip(
-            monthrange(dates[0], dates[1] + timedelta(days=4)),
+            monthrange(header_start, stop + timedelta(days=32)),
             itertools.pairwise(
                 (
                     *(0, 0),
@@ -158,6 +188,12 @@ def gen_day_view(logs, apps, start, stop):
             ),
         )
     )
+
+    if start_offset:
+        header = '  ' + header
+        preheader = '  ' + preheader
+
     weekdays = ('Mon', '   ', 'Wed', '   ', 'Fri', '   ', 'Sun')  # o_o
     body = '\n'.join(f'{weekdays[n]} {line}' for n, line in enumerate(array2text(res)))
+
     return f'    {preheader}\n    {header}\n{body}\n'

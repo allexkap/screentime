@@ -1,3 +1,4 @@
+import argparse
 import itertools
 import os
 import re
@@ -70,21 +71,27 @@ class Logs:
     #         file.write(yaml.dump(self.logs))
 
     def __getitem__(self, index):
-        if isinstance(index, slice):
-            if isinstance(index.step, timedelta):
-                step = index.step
-            else:
-                step = timedelta(hours=1)
-
-            return sum(
-                (self[ts] for ts in timerange(index.start, index.stop, step)),
-                Counter(),
-            )
-
         if isinstance(index, datetime):
             index = index.strftime(r'%y%m%d%H')
 
         return self.logs.get(index, Counter())
+
+
+def get_rating(logs, start, stop):
+    res = sum(
+        (logs[ts] for ts in timerange(start, stop, timedelta(hours=1))), Counter()
+    )
+    res = tuple(
+        (k, v) for k, v in sorted(res.items(), key=lambda l: l[1], reverse=True)
+    )
+    return res
+
+
+def gen_title(rating):
+    return 'Apps: {}\nTime: {}\n'.format(
+        ', '.join(app for app, _ in rating),
+        timedelta(seconds=sum(score for _, score in rating)),
+    )
 
 
 def gen_hour_view(logs, apps, start, stop, hour_shift=8):
@@ -195,3 +202,27 @@ def gen_day_view(logs, apps, start, stop, hour_shift=8):
     body = '\n'.join(f'{weekdays[n]} {line}' for n, line in enumerate(array2text(res)))
 
     return f'{header_offset}{preheader}\n{header_offset}{header}\n{body}\n'
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-p', '--path', required=True)
+    parser.add_argument(
+        '-f', '--from', dest='start', type=datetime.fromisoformat, required=True
+    )
+    parser.add_argument(
+        '-t', '--to', dest='stop', type=datetime.fromisoformat, required=True
+    )
+    parser.add_argument('-r', '--rank', type=int, required=True)
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    args = parse_args()
+
+    logs = Logs(args.path)
+    rating = get_rating(logs, args.start, args.stop)[args.rank : args.rank + 1]
+    apps = tuple(app for app, _ in rating)
+
+    print(gen_title(rating))
+    print(gen_day_view(logs, apps, args.start, args.stop), end='')

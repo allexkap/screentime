@@ -59,17 +59,18 @@ class Logs:
 
     def load_logs(self, path: str) -> None:
         path = Path(path)
-        # if path.is_file():
-        #     with open(path) as file:
-        #         return yaml.load(file, yaml.SafeLoader)
-        for filename in os.listdir(path):
-            if re.match('\d{8}$', filename):
-                with open(path / filename) as file:
-                    self.logs[filename] = Counter(yaml.load(file, yaml.SafeLoader))
+        if path.is_dir():
+            for filename in os.listdir(path):
+                if re.match('\d{8}$', filename):
+                    with open(path / filename) as file:
+                        self.logs[filename] = Counter(yaml.load(file, yaml.SafeLoader))
+        else:
+            with open(path) as file:
+                self.logs = yaml.load(file, yaml.UnsafeLoader)
 
-    # def squeeze(self, outfile: Path) -> None:
-    #     with open(outfile, 'w') as file:
-    #         file.write(yaml.dump(self.logs))
+    def squeeze(self, outfile: Path) -> None:
+        with open(outfile, 'w') as file:
+            yaml.dump(self.logs, file)
 
     def __getitem__(self, index):
         if isinstance(index, datetime):
@@ -208,14 +209,18 @@ def gen_day_view(logs, apps, start, stop, hour_shift=8):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', '--path', required=True)
-    parser.add_argument(
-        '-f', '--from', dest='start', type=datetime.fromisoformat, required=True
-    )
-    parser.add_argument(
-        '-t', '--to', dest='stop', type=datetime.fromisoformat, required=True
-    )
+    parser.add_argument('-f', '--from', dest='start', type=datetime.fromisoformat)
+    parser.add_argument('-t', '--to', dest='stop', type=datetime.fromisoformat)
     parser.add_argument('-r', '--rank', type=int)
-    return parser.parse_args()
+    parser.add_argument('-o', '--out')
+
+    args = parser.parse_args()
+    if (not args.start or not args.stop) and not args.out:
+        parser.error(
+            'the following arguments are required: (--from and --to) or --out '
+        )
+
+    return args
 
 
 def non_interactive_mode(logs, args):
@@ -246,6 +251,9 @@ if __name__ == '__main__':
     args = parse_args()
 
     logs = Logs(args.path)
+    if args.out:
+        logs.squeeze(args.out)
+        exit()
 
     if args.rank is not None:
         non_interactive_mode(logs, args)

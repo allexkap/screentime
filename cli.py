@@ -23,8 +23,9 @@ def array2text(arr):
 
 
 def normalize(arr):
+    top = arr.max()
     arr *= 255
-    arr //= arr.max() // 255
+    arr //= top
     return arr
 
 
@@ -82,7 +83,7 @@ def get_rating(logs, start, stop):
         (logs[ts] for ts in timerange(start, stop, timedelta(hours=1))), Counter()
     )
     res = tuple(
-        (k, v) for k, v in sorted(res.items(), key=lambda l: l[1], reverse=True)
+        (k, v) for k, v in sorted(res.items(), key=lambda l: l[1], reverse=True) if k
     )
     return res
 
@@ -213,16 +214,43 @@ def parse_args():
     parser.add_argument(
         '-t', '--to', dest='stop', type=datetime.fromisoformat, required=True
     )
-    parser.add_argument('-r', '--rank', type=int, required=True)
+    parser.add_argument('-r', '--rank', type=int)
     return parser.parse_args()
+
+
+def non_interactive_mode(logs, args):
+    rating = get_rating(logs, args.start, args.stop)[args.rank : args.rank + 1]
+    apps = tuple(app for app, _ in rating)
+
+    print(gen_title(rating))
+    print(gen_day_view(logs, apps, args.start, args.stop), end='')
+
+
+def interactive_mode(logs, args):
+    from getkey import getkey, keys
+
+    args.rank = 0
+    rating = get_rating(logs, args.start, args.stop)
+    print('\033[s', end='')
+    while True:
+        print('\033[u\033[J', end='')
+        non_interactive_mode(logs, args)
+        match getkey():
+            case keys.UP:
+                args.rank = max(args.rank - 1, 0)
+            case keys.DOWN:
+                args.rank = min(args.rank + 1, len(rating) - 1)
 
 
 if __name__ == '__main__':
     args = parse_args()
 
     logs = Logs(args.path)
-    rating = get_rating(logs, args.start, args.stop)[args.rank : args.rank + 1]
-    apps = tuple(app for app, _ in rating)
 
-    print(gen_title(rating))
-    print(gen_day_view(logs, apps, args.start, args.stop), end='')
+    if args.rank is not None:
+        non_interactive_mode(logs, args)
+    else:
+        try:
+            interactive_mode(logs, args)
+        except KeyboardInterrupt:
+            pass

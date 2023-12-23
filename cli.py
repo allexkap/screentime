@@ -88,10 +88,12 @@ class Logs:
 
 
 def gen_hour_view(logs, apps, start, stop, hour_shift=8):
+    shift = timedelta(hours=hour_shift)
+
     res = np.fromiter(
         chain.from_iterable(
             (
-                sum(logs[ts].get(app, 0) for app in apps)
+                (lambda x: sum(x.get(app, 0) for app in apps))(logs[ts + shift])
                 for ts in timerange(day, day + timedelta(days=1), timedelta(hours=1))
             )
             for day in timerange(start, stop, timedelta(days=1))
@@ -99,7 +101,6 @@ def gen_hour_view(logs, apps, start, stop, hour_shift=8):
         dtype=int,
     )
     res.shape = -1, 24
-    res = np.roll(res, -hour_shift)
     res = normalize(res).T
 
     header = '  '.join(
@@ -126,18 +127,19 @@ def gen_hour_view(logs, apps, start, stop, hour_shift=8):
     return f'   {preheader}\n   {header}\n{body}\n'
 
 
-def gen_day_view(logs, apps, start, stop):
+def gen_day_view(logs, apps, start, stop, hour_shift=8):
     start_offset = start.weekday()
     start -= timedelta(days=start_offset)
     stop_offset = -stop.weekday() % 7
     stop += timedelta(days=stop_offset)
+    shift = timedelta(hours=hour_shift)
 
     res = np.fromiter(
         chain.from_iterable(
             (
                 (
                     sum(
-                        logs[ts].get(app, 0)
+                        logs[ts + shift].get(app, 0)
                         for app in apps
                         for ts in timerange(
                             day, day + timedelta(days=1), timedelta(hours=1)
@@ -159,10 +161,10 @@ def gen_day_view(logs, apps, start, stop):
     res.shape = -1, 7
     res = normalize(res).T
 
-    for i in range(start_offset):
-        res[i, 0] = -1
-    for i in range(stop_offset):
-        res[-i - 1, -1] = -1
+    res[:start_offset, 0] = -1
+    res[res.shape[0] - stop_offset :, -1] = -1
+
+    header_offset = '      ' if start_offset else '    '
 
     header_start = start
     if start_offset:
@@ -189,11 +191,7 @@ def gen_day_view(logs, apps, start, stop):
         )
     )
 
-    if start_offset:
-        header = '  ' + header
-        preheader = '  ' + preheader
-
     weekdays = ('Mon', '   ', 'Wed', '   ', 'Fri', '   ', 'Sun')  # o_o
     body = '\n'.join(f'{weekdays[n]} {line}' for n, line in enumerate(array2text(res)))
 
-    return f'    {preheader}\n    {header}\n{body}\n'
+    return f'{header_offset}{preheader}\n{header_offset}{header}\n{body}\n'

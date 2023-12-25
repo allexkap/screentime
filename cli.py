@@ -36,32 +36,30 @@ def timerange(start: datetime, stop: datetime, step: timedelta):
 
 
 def monthrange(start: datetime, stop: datetime):
-    day = timedelta(days=1)
     carry = timedelta()
     while start < stop:
         yield start
         tmp = start.replace(day=1)
         step = (tmp + timedelta(days=32)).replace(day=1) - tmp
         tmp = start
-        start += step
-        while carry.days:
-            start += carry
-            carry -= day
-        while start.month - tmp.month == 2:
-            carry += day
-            start -= day
+        start += step + carry
+        carry *= 0
+        if start.month - tmp.month == 2:
+            offset = timedelta(days=start.day)
+            carry += offset
+            start -= offset
 
 
 class Logs:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: str) -> None:
         self.logs = {}
-        self.load_logs(path)
+        self._load_logs(path)
 
-    def load_logs(self, path: str) -> None:
-        path = Path(path)
+    def _load_logs(self, _path: str) -> None:
+        path = Path(_path)
         if path.is_dir():
             for filename in os.listdir(path):
-                if re.match('\d{8}$', filename):
+                if re.match(r'\d{8}$', filename):
                     with open(path / filename) as file:
                         self.logs[filename] = Counter(yaml.load(file, yaml.SafeLoader))
         else:
@@ -72,7 +70,7 @@ class Logs:
         with open(outfile, 'w') as file:
             yaml.dump(self.logs, file)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: str | datetime) -> Counter[str]:
         if isinstance(index, datetime):
             index = index.strftime(r'%y%m%d%H')
 

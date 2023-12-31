@@ -6,36 +6,39 @@ from collections import Counter
 from datetime import datetime, timedelta
 from itertools import chain
 from pathlib import Path
+from typing import Any, Generator, Iterable
 
 import numpy as np
 import yaml
 
 
-def color2text(r, g, b, t='  '):
+def color2text(r: int | float, g: int | float, b: int | float, t='  ') -> str:
     if min(r, g, b) < 0:
         return t
     f = lambda v: min(max(int(v), 0), 255)
     return f'\033[48;2;{f(r)};{f(g)};{f(b)}m{t}\033[0m'
 
 
-def array2text(arr):
+def array2text(arr: Iterable) -> tuple[str, ...]:
     return tuple(''.join(color2text(0, cell, 0) for cell in row) for row in arr)
 
 
-def normalize(arr):
+def normalize(arr: np.ndarray) -> np.ndarray:
     top = arr.max()
     arr *= 255
     arr //= top
     return arr
 
 
-def timerange(start: datetime, stop: datetime, step: timedelta):
+def timerange(
+    start: datetime, stop: datetime, step: timedelta
+) -> Generator[datetime, Any, Any]:
     while start < stop:
         yield start
         start += step
 
 
-def monthrange(start: datetime, stop: datetime):
+def monthrange(start: datetime, stop: datetime) -> Generator[datetime, Any, Any]:
     carry = timedelta()
     while start < stop:
         yield start
@@ -77,7 +80,9 @@ class Logs:
         return self.logs.get(index, Counter())
 
 
-def get_rating(logs, start, stop):
+def get_rating(
+    logs: Logs, start: datetime, stop: datetime
+) -> tuple[tuple[str, int], ...]:
     res = sum(
         (logs[ts] for ts in timerange(start, stop, timedelta(hours=1))), Counter()
     )
@@ -87,20 +92,22 @@ def get_rating(logs, start, stop):
     return res
 
 
-def gen_title(rating):
+def gen_title(rating: tuple[tuple[str, int], ...]) -> str:
     return 'Apps: {}\nTime: {}\n'.format(
         ', '.join(app for app, _ in rating),
         timedelta(seconds=sum(score for _, score in rating)),
     )
 
 
-def gen_hour_view(logs, apps, start, stop, hour_shift=8):
+def gen_hour_view(
+    logs: Logs, apps: Iterable[str], start: datetime, stop: datetime, hour_shift=8
+) -> str:
     shift = timedelta(hours=hour_shift)
 
     res = np.fromiter(
         chain.from_iterable(
             (
-                (lambda x: sum(x.get(app, 0) for app in apps))(logs[ts + shift])
+                (lambda x: sum(int(x.get(app, 0)) for app in apps))(logs[ts + shift])
                 for ts in timerange(day, day + timedelta(days=1), timedelta(hours=1))
             )
             for day in timerange(start, stop, timedelta(days=1))
@@ -134,7 +141,9 @@ def gen_hour_view(logs, apps, start, stop, hour_shift=8):
     return f'   {preheader}\n   {header}\n{body}\n'
 
 
-def gen_day_view(logs, apps, start, stop, hour_shift=8):
+def gen_day_view(
+    logs: Logs, apps: Iterable[str], start: datetime, stop: datetime, hour_shift=8
+) -> str:
     start_offset = start.weekday()
     start -= timedelta(days=start_offset)
     stop_offset = -stop.weekday() % 7
@@ -204,7 +213,7 @@ def gen_day_view(logs, apps, start, stop, hour_shift=8):
     return f'{header_offset}{preheader}\n{header_offset}{header}\n{body}\n'
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', '--path', required=True)
     parser.add_argument('-f', '--from', dest='start', type=datetime.fromisoformat)
@@ -221,7 +230,7 @@ def parse_args():
     return args
 
 
-def non_interactive_mode(logs, args):
+def non_interactive_mode(logs: Logs, args: argparse.Namespace) -> None:
     rating = get_rating(logs, args.start, args.stop)[args.rank : args.rank + 1]
     apps = tuple(app for app, _ in rating)
 
@@ -229,7 +238,7 @@ def non_interactive_mode(logs, args):
     print(gen_day_view(logs, apps, args.start, args.stop), end='')
 
 
-def interactive_mode(logs, args):
+def interactive_mode(logs: Logs, args: argparse.Namespace) -> None:
     from getkey import getkey, keys
 
     args.rank = 0

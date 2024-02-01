@@ -1,27 +1,35 @@
+import asyncio
+
+import psutil
 import win32api
 import win32gui
 import win32process
-import psutil
+
+from observer import Observer
 
 
 def safe(default, handler=lambda e: None):
     def dec(func):
         def inner(*args, **kwargs):
             try:
-                return func()
-            except Exception as e:
-                handler(e)
+                return func(*args, **kwargs)
+            except Exception as ex:
+                handler(ex)
                 return default
+
         return inner
+
     return dec
 
 
-def handler(e):
-    print('Warning:', e)
+def handler(ex):
+    print('Warning:', ex)
+
 
 @safe(0, handler)
 def getIdleSec():
     return win32api.GetTickCount() - win32api.GetLastInputInfo()
+
 
 @safe(None, handler)
 def getProcessName():
@@ -31,10 +39,8 @@ def getProcessName():
     return name
 
 
-import asyncio
-from observer import Observer
-
 try:
-    asyncio.run(Observer(watch=getProcessName, idle=getIdleSec, path='log').observe())
-except Exception as e:
-    input('Critical:', e)
+    asyncio.run(Observer(watch=getProcessName, idle=getIdleSec, path='./log').observe())
+except Exception as ex:
+    print('Critical:', ex)
+    input()

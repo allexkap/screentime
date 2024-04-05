@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import logging.handlers
 from argparse import ArgumentParser
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -17,8 +18,12 @@ logging.basicConfig(
     format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
     handlers=(
-        logging.FileHandler(Path(__file__).with_suffix('.log'), 'a'),
         logging.StreamHandler(),
+        logging.handlers.RotatingFileHandler(
+            Path(__file__).with_suffix('.log'),
+            maxBytes=2**20,
+            backupCount=4,
+        ),
     ),
 )
 
@@ -31,6 +36,7 @@ def safe(default, attempts=3):
                     return func(*args, **kwargs)
                 except Exception as ex:
                     logging.warning(ex)
+            logging.error(f'fallback to the default value: {default}')
             return default
 
         return inner
@@ -44,13 +50,10 @@ async def lightsleep(seconds: float) -> None:
         await asyncio.sleep(1)
 
 
-async def repeat(func: Callable, seconds: float, now=False) -> NoReturn:
-    delta = seconds if not now else 0
+async def repeat(func: Callable, seconds: float) -> NoReturn:
     while True:
-        await lightsleep(delta)
-        delta = func()
-        if delta is None:
-            delta = seconds
+        await lightsleep(seconds)
+        func()
 
 
 @safe(default=0)
@@ -79,7 +82,7 @@ def parse_args():
         '-u',
         '--update',
         help='interval in seconds between checking the foreground window',
-        default=60,
+        default=1,
         type=int,
     )
     parser.add_argument(
@@ -99,12 +102,14 @@ def parse_args():
     return parser.parse_args()
 
 
-def update():
+def update() -> None:
+    if get_idle_sec() > args.idle:
+        return
     app = get_process_name()
     activity.update(app, args.update)
 
 
-def commit():
+def commit() -> None:
     activity.commit()
 
 

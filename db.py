@@ -3,27 +3,16 @@ from datetime import datetime
 
 
 class Cache:
-    def __init__(self, data: list[tuple[int, str, int]] = []) -> None:
-        timestamp: int | None = None
-        cache: dict[str, int] = {}
-        for entry in data:
-            if timestamp is None:
-                timestamp = entry[0]
-            elif timestamp != entry[0]:
-                raise ValueError('timestamps are not the same')
-            if entry[1] in cache:
-                raise ValueError('apps collision detected')
-            cache[entry[1]] = entry[2]
-        else:
-            timestamp = int(datetime.now().timestamp()) // 3600 * 3600
+    def __init__(self, timestamp: int, data: list[tuple[str, int]] = []) -> None:
         self.timestamp = timestamp
-        self._cache = cache
-
-    def __iter__(self):
-        return self._cache.__iter__()
+        self._cache: dict[str, int] = {}
+        for entry in data:
+            if entry[0] in self._cache:
+                raise ValueError('apps collision detected')
+            self._cache[entry[0]] = entry[1]
 
     def __getitem__(self, key) -> int:
-        return self._cache.__getitem__(key)
+        return self._cache.get(key, 0)
 
     def __setitem__(self, key, value) -> None:
         return self._cache.__setitem__(key, value)
@@ -43,7 +32,7 @@ class Activity:
         )
     '''
     _update_row_cmd = 'insert or replace into activity values (?, ?, ?)'
-    _select_all_by_timestamp_cmd = 'select * from activity where timestamp = ?'
+    _select_all_by_ts_cmd = 'select app, seconds from activity where timestamp = ?'
     _select_all_by_app_cmd = 'select * from activity where app = ?'
 
     def __init__(self, path: str) -> None:
@@ -51,29 +40,22 @@ class Activity:
         self.cur = self.con.cursor()
         self.cur.execute(self._create_table_cmd)
         self.con.commit()
-        self._update_cache()
+        self._validate_cache(init=True)
 
-    def _update_cache(self) -> None:
+    def _validate_cache(self, init: bool = False) -> None:
         timestamp = int(datetime.now().timestamp()) // 3600 * 3600
-        data = self.cur.execute(
-            self._select_all_by_timestamp_cmd, (timestamp,)
-        ).fetchall()
-        self.cache = Cache(data)
-
-    def _validate_cache(self) -> None:
-        timestamp = int(datetime.now().timestamp()) // 3600 * 3600
-        if timestamp != self.cache.timestamp:
+        if not init:
+            if timestamp == self.cache.timestamp:
+                return
             self.commit()
-            self._update_cache()
+        data = self.cur.execute(self._select_all_by_ts_cmd, (timestamp,)).fetchall()
+        self.cache = Cache(timestamp, data)
 
     def update(self, app: str, score: int) -> None:
-        if app not in self.cache:
-            self.cache[app] = 0
+        self._validate_cache()
         self.cache[app] += score
 
     def commit(self) -> None:
-        if self.cache is None:
-            return
         with self.con:
             for entry in self.cache.export():
                 self.cur.execute(self._update_row_cmd, entry)

@@ -53,12 +53,12 @@ async def repeat(func: Callable, seconds: float, now=False) -> NoReturn:
             delta = seconds
 
 
-@safe(default=0, attempts=1)
+@safe(default=0)
 def get_idle_sec() -> int:
     return win32api.GetTickCount() - win32api.GetLastInputInfo()
 
 
-@safe(default='?', attempts=1)
+@safe(default='?')
 def get_process_name() -> str:
     hwnd = win32gui.GetForegroundWindow()
     _, pid = win32process.GetWindowThreadProcessId(hwnd)
@@ -75,12 +75,33 @@ def parse_args():
         default='./db.sqlite3',
         type=Path,
     )
+    parser.add_argument(
+        '-u',
+        '--update',
+        help='interval in seconds between checking the foreground window',
+        default=60,
+        type=int,
+    )
+    parser.add_argument(
+        '-c',
+        '--commit',
+        help='interval in seconds between saving to disk',
+        default=60,
+        type=int,
+    )
+    parser.add_argument(
+        '-i',
+        '--idle',
+        help='interval in seconds of inactivity',
+        default=30,
+        type=int,
+    )
     return parser.parse_args()
 
 
 def update():
     app = get_process_name()
-    activity.update(app, 1)
+    activity.update(app, args.update)
 
 
 def commit():
@@ -94,8 +115,8 @@ if __name__ == '__main__':
 
     loop = asyncio.new_event_loop()
     try:
-        loop.create_task(repeat(update, 1))
-        loop.create_task(repeat(commit, 60))
+        loop.create_task(repeat(update, args.update))
+        loop.create_task(repeat(commit, args.commit))
         loop.run_forever()
     except Exception as ex:
         logging.critical(ex)

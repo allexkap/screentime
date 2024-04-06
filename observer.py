@@ -57,8 +57,8 @@ async def repeat(func: Callable, seconds: float) -> NoReturn:
 
 
 @safe(default=0)
-def get_idle_sec() -> int:
-    return win32api.GetTickCount() - win32api.GetLastInputInfo()
+def get_idle_sec() -> float:
+    return (win32api.GetTickCount() - win32api.GetLastInputInfo()) / 1000
 
 
 @safe(default='?')

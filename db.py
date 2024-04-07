@@ -50,6 +50,7 @@ class Activity:
             self.commit()
         data = self.cur.execute(self._select_all_by_ts_cmd, (timestamp,)).fetchall()
         self.cache = Cache(timestamp, data)
+        self.cache['*'] = 1
 
     def update(self, app: str, score: int) -> None:
         self._validate_cache()

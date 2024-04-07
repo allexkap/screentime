@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import logging.handlers
+import os
 from argparse import ArgumentParser
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -108,10 +109,13 @@ def parse_args():
 
 
 def update() -> None:
-    if get_idle_sec() > args.idle:
-        return
-    app = get_process_name()
-    activity.update(app, args.update)
+    idle = get_idle_sec()
+    if idle <= args.idle:
+        app = get_process_name()
+        activity.update(app, args.update)
+    else:
+        app = ''
+    print(f'\033[K {idle:4.0f} {app}', end='\r', flush=True)
 
 
 def commit() -> None:
@@ -120,6 +124,7 @@ def commit() -> None:
 
 if __name__ == '__main__':
     args = parse_args()
+    os.system('')  # enables ansi escape characters in windows terminal
 
     activity = Activity(args.db_path)
 

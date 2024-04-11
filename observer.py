@@ -48,17 +48,18 @@ def safe(default, attempts=3):
 async def lightsleep(ts: datetime) -> None:
     while True:
         now = datetime.now()
-        if now >= ts:
+        dt = (ts - now).total_seconds()
+        if dt <= 0:
             return
-        await asyncio.sleep(min(1, (ts - now).total_seconds()))
+        await asyncio.sleep(min(1, dt))
 
 
 async def repeat(func: Callable, seconds: float) -> NoReturn:
     delta = timedelta(seconds=seconds)
-    ts = datetime.now() + delta
+    ts = datetime.now()
     while True:
+        ts = max(ts + delta, datetime.now())
         await lightsleep(ts)
-        ts += delta
         func()
 
 
